@@ -45,6 +45,15 @@ plt.errorbar(t,obsl,err1 , fmt = '.')
 mag = fitter.magnification(data['KMT-C31-'][0])
 chi = (mag-obsl)**2/err1**2
 
+#%% [markdown]
+# Trying a 3D plot of the data
+
+#%%
+from mpl_toolkits.mplot3d import axes3d, Axes3D
+fig = plt.figure()
+ax = Axes3D(fig)
+ax.scatter(mag,obsl,chi,c='r')
+plt.show()
 
 #%%
 X = np.hstack((mag.reshape(len(mag),1),obsl.reshape(len(obsl),1),chi.reshape(len(chi),1)))
