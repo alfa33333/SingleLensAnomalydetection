@@ -51,7 +51,7 @@ def read_data(data_directory, t_range=None, minimum_points=5, max_uncertainty=0.
                 dyaxis = dat[points, 2]
             else:
                 yaxis = 10.0**(0.4*(25 - dat[points, 1]))
-                dat[points, 2] = np.sqrt(dat[points, 2]**2 + (0.01)**2)
+                dat[points, 2] = np.sqrt(dat[points, 2]**2 + (0.005)**2)
                 dyaxis = 10.0**(0.4*(25 - dat[points, 1] + dat[points, 2])) - yaxis
             points = np.where(dyaxis/yaxis < max_uncertainty)[0]
             time = time[points]

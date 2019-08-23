@@ -105,6 +105,8 @@ venv.bak/
 .mypy_cache/
 
 #individual files
+/test_files
 IsolationForest-Copy1.ipynb
 IsolationForest.py
 SingleLensFitter.py
+Renormalizing-test.ipynb
