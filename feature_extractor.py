@@ -22,16 +22,19 @@ class outlierScore():
         if kwargs:
             self.__dict__.update(kwargs)
 
-    def main_detection(self,folder,solution,**kwargs):
+    def main_detection(self,folder,solution,show=True,**kwargs):
         fitter = self.singlelens(folder,solution,**kwargs)
         self.y_pred, self.time_out, self.Y, self.t_vec, self.obs_vc,\
              self.err_vec, self.magl = self.outlier_detection(fitter,self.outliers_fraction,self.random_state,self.n_neighbors)
         names = ["Robust covariance","One-Class SVM","Isolation Forest","Local Outlier Factor"]
-        feat_len = np.linspace(0,len(self.Y),len(self.Y))
-        self.print(names,feat_len,self.Y,self.y_pred,self.time_out,**kwargs)
-        self.print(names,self.t_vec,self.obs_vc,self.y_pred,self.time_out,**kwargs)
+        #feat_len = np.linspace(0,len(self.Y),len(self.Y))
+        self.print(names,self.Y[:,0],self.Y[:,1],self.y_pred,self.time_out,show=show, **kwargs)
+        self.print(names,self.t_vec,self.obs_vc,self.y_pred,self.time_out,show=show, **kwargs)
         self.y_abs = self.extract_abs(self.y_pred)
         self.y_int = self.y_abs.astype(int)
+
+    #def properties(self,attribute):
+    #    return self.attribute
 
 
     @classmethod    
@@ -94,8 +97,12 @@ class outlierScore():
         t_vec = np.sort(t_vec)
         magl = fitter.magnification(t_vec)
         chi2 = (magl-obs_vc)**2/err_vec**2
-        Y = np.hstack(chi2.reshape(len(chi2),1))
-        Y = Y.reshape(-1,1)
+        manhatan = obs_vc-magl
+        ##normalization
+        chi_scaled = ( chi2 )/(np.max(chi2))
+        t_scaled = (manhatan-np.mean(manhatan))/(np.max(manhatan)-np.min(manhatan))
+
+        Y = np.hstack((t_scaled.reshape(len(t_scaled),1),chi_scaled.reshape(len(chi_scaled),1)))
         return Y, t_vec, obs_vc, err_vec, magl
 
     @staticmethod
@@ -144,6 +151,7 @@ class outlierScore():
         fig.savefig(fname=folder+name_fig,**kwargs)
         if show:
             plt.show()
+        plt.close(fig)
 
 def outliers_plot(t_vec, obs_vc,magl,y_abs,save=True,**kwargs):
     fig = plt.figure(figsize=(8,8))
@@ -157,3 +165,72 @@ def outliers_plot(t_vec, obs_vc,magl,y_abs,save=True,**kwargs):
     if save:
         fig.savefig("./figure2")
     plt.show()
+    plt.close(fig)
+
+class timeFeat(outlierScore):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.perct = 0.95
+
+    def time_feature(self,folder, solution, **kwargs):
+        super().main_detection(folder, solution, **kwargs)
+        self.minlevel = self.light_level(self.magl, self.perct)
+        self.y_test = self.significant_outliers(self.y_int,\
+                                                self.magl, self.obs_vc, self.minlevel)
+        self.biggest, self.average, self.score_track, self.unique, self.counts = self.time_score(self.y_test)
+        self.frac, self.total = self.time_count(self.t_vec, self.magl, self.minlevel, self.score_track, self.biggest)
+
+    def plot_score(self):
+        plt.plot(self.t_vec,self.score_track)
+        plt.show()
+
+    @staticmethod
+    def light_level(magl,perct):
+        inlevel = np.max(magl)-(np.max(magl)-np.min(magl))*(perct)
+        return inlevel
+    
+    @staticmethod
+    def significant_outliers(y_int,magl,obs_vc,minlevel):
+        y_test = np.copy(y_int)
+        y_test[magl<minlevel] = 0
+        y_test[obs_vc<1] =  0
+        return y_test
+
+    @staticmethod
+    def time_score(y_test):
+        score = 0
+        score_track = np.zeros(len(y_test))
+        for i,track in enumerate(y_test):
+            if track == 1:
+                score += 1
+                score_track[i] = score
+            elif track==0 and score>0:
+                score -= 1
+                score_track[i] = score
+            else:
+                score_track[i] = score
+        unique, counts = np.unique(score_track, return_counts=True)
+        weight_list = (1/counts)*np.sum(1/counts)
+        weights = np.zeros_like(score_track)
+        for i,val in enumerate(unique):
+            weights[score_track==val] = weight_list[i]
+        average = np.average(score_track,weights=weights)
+        biggest = np.where(score_track>= unique[-1])[0]
+        return biggest, average, score_track, unique, counts
+
+    @staticmethod
+    def time_count(t_vec,magl,minlevel,score_track,biggest):
+        time_peak95 = np.max(t_vec[magl>minlevel])-np.min(t_vec[magl>minlevel])
+        total = 0
+        for i in biggest:
+            temp = np.where(score_track<=0)[0]
+            maxval = temp[temp > i][0]
+            minval = temp[temp < i][-1]
+            time_outl = t_vec[maxval]-t_vec[minval]
+            frac = time_outl/time_peak95
+            total += frac
+            print('Fraction of the longest ourliers combination: {:4f}'.format(frac))
+        print('total fraction longest on outliers: {:.4f}'.format(total))
+        print('Average anomalytime on outliers:{:.4f}'.format(total/len(biggest)))
+        return frac, total 
+
