@@ -70,7 +70,10 @@ class outlierScore():
 
     @classmethod
     def singlelens(cls,folder,solution,**kwargs):
-        data = cls.read(folder,**kwargs)
+        if 't_range' in kwargs:
+            data = cls.read(folder,kwargs.get('t_range'))
+        else:
+            data = cls.read(folder,t_range=None,max_uncertainty=1 )
         fitter = slu(data,solution)
         return fitter
 
@@ -222,11 +225,15 @@ class timeFeat(outlierScore):
     def time_count(t_vec,magl,minlevel,score_track,biggest):
         time_peak95 = np.max(t_vec[magl>minlevel])-np.min(t_vec[magl>minlevel])
         total = 0
+        old = [-1,-1]
         for i in biggest:
             temp = np.where(score_track<=0)[0]
             maxval = temp[temp > i][0]
             minval = temp[temp < i][-1]
+            if (old[0] == t_vec[maxval]) and (old[1] == t_vec[minval]) :
+                continue
             time_outl = t_vec[maxval]-t_vec[minval]
+            old = [t_vec[maxval], t_vec[minval]]
             frac = time_outl/time_peak95
             total += frac
             print('Fraction of the longest ourliers combination: {:4f}'.format(frac))
